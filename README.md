@@ -4,3 +4,5 @@
 - [Flujos y diseño de producto](GRAFICOS.md) con diagramas y especificación de pantallas.
 - [Arquitectura y costos en GCP](ARQUITECTURA.md) con tres opciones, estimación y plan operativo.
 - [Backlog](BACKLOG.md) con historias y tareas para GitHub Projects.
+
+- [CI en GitHub Actions](.github/CI.md) con requisitos de pruebas, cobertura y protección de ramas.

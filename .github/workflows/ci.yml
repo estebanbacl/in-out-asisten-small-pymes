@@ -1,0 +1,74 @@
+name: CI/CD Pipeline
+
+"on":
+  push:
+    branches: [develop, master]
+  pull_request:
+    branches: [develop, master]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: CI - lint, tests and coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Check Node.js project files
+        run: |
+          for file in package.json package-lock.json; do
+            if [[ ! -f "$file" ]]; then
+              echo "::error file=$file::The Node.js project must include $file before CI can run."
+              exit 1
+            fi
+          done
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run static analysis
+        run: npm run lint
+
+      - name: Run unit and integration tests with coverage
+        run: |
+          rm -rf -- coverage
+          npm test -- --ci --coverage --coverageDirectory=coverage --coverageReporters=text --coverageReporters=json-summary
+
+      - name: Enforce minimum coverage of 70%
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+
+          const { total } = JSON.parse(readFileSync('coverage/coverage-summary.json', 'utf8'));
+          const minimum = 70;
+          for (const metric of ['lines', 'statements', 'functions', 'branches']) {
+            const counts = total?.[metric];
+            if (!Number.isSafeInteger(counts?.total) || counts.total <= 0 ||
+                !Number.isSafeInteger(counts.covered) || counts.covered < 0 ||
+                counts.covered > counts.total) {
+              console.error(`::error::Coverage report has no valid counts for ${metric}.`);
+              process.exitCode = 1;
+              continue;
+            }
+
+            const percent = 100 * counts.covered / counts.total;
+            console.log(`${metric}: ${percent.toFixed(2)}% (minimum ${minimum}%)`);
+            if (100n * BigInt(counts.covered) < BigInt(minimum) * BigInt(counts.total)) {
+              console.error(`::error::${metric} coverage is below ${minimum}%.`);
+              process.exitCode = 1;
+            }
+          }
+          NODE
